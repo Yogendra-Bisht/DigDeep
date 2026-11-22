@@ -60,8 +60,50 @@ export interface NodeLayer {
   label: 'Hook' | 'Why' | 'Evidence' | 'Investigate';
   contentIntuitive: string;           // content for Intuitive Explorer mode
   contentDeepDive: string;            // content for Deep Dive Researcher mode
-  mediaUrl?: string;                  // relative path in content pack
+  mediaUrl?: string;                  // relative path or illustration identifier
   interactiveType?: 'quiz' | 'dig' | 'artifact' | 'field_prompt' | null;
+  interactiveRefId?: string;          // e.g. caseId for artifact detective
+}
+
+// ─── Artifact Detective ──────────────────────────────────────
+
+export interface ArtifactHotspot {
+  id: string;
+  title: string;
+  xPercent: number; // 0 - 100
+  yPercent: number; // 0 - 100
+  observationIntuitive: string;
+  observationDeepDive: string;
+  clueBadge: string;
+}
+
+export interface HypothesisQuestion {
+  id: string;
+  question: string;
+  options: {
+    id: string;
+    text: string;
+    isCorrect: boolean;
+    explanation: string;
+  }[];
+}
+
+export interface ArtifactCase {
+  id: string;
+  title: string;
+  provenance: string;
+  period: string;
+  material: string;
+  emoji: string;
+  description: string;
+  hotspots: ArtifactHotspot[];
+  hypothesisQuestions: HypothesisQuestion[];
+  deductionSummary: {
+    title: string;
+    bodyIntuitive: string;
+    bodyDeepDive: string;
+    significancePoints: string[];
+  };
 }
 
 // ─── Field Logbook ──────────────────────────────────────────

@@ -1,18 +1,21 @@
 // ============================================================
 // DigDeep — Main Tab Navigator (Post-Onboarding)
+// Integrates Atlas Navigator, Logbook, Packs & Settings
 // ============================================================
 
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, View, StyleSheet } from 'react-native';
+
+import AtlasNavigator from './AtlasNavigator';
 import { COLORS, TYPOGRAPHY } from '../theme';
 import type { MainTabParamList } from '../types';
 
-// Placeholder screens — replaced in Phase 2 & 3
-const PlaceholderScreen = ({ label }: { label: string }) => (
+// Placeholder screens for Phase 3 modules
+const PlaceholderScreen = ({ label, phase }: { label: string; phase: string }) => (
   <View style={styles.placeholder}>
     <Text style={styles.placeholderText}>{label}</Text>
-    <Text style={styles.placeholderSub}>Coming in Phase 2 →</Text>
+    <Text style={styles.placeholderSub}>Scheduled for {phase} →</Text>
   </View>
 );
 
@@ -27,7 +30,7 @@ export default function MainNavigator() {
         tabBarActiveTintColor: COLORS.accent,
         tabBarInactiveTintColor: COLORS.textMuted,
         tabBarLabelStyle: styles.tabLabel,
-        tabBarIcon: ({ color }) => {
+        tabBarIcon: () => {
           const icons: Record<string, string> = {
             Atlas: '🗺️',
             Logbook: '📓',
@@ -38,17 +41,15 @@ export default function MainNavigator() {
         },
       })}
     >
-      <Tab.Screen name="Atlas">
-        {() => <PlaceholderScreen label="Atlas" />}
-      </Tab.Screen>
+      <Tab.Screen name="Atlas" component={AtlasNavigator} />
       <Tab.Screen name="Logbook">
-        {() => <PlaceholderScreen label="Field Logbook" />}
+        {() => <PlaceholderScreen label="Personal Field Logbook" phase="Phase 3" />}
       </Tab.Screen>
       <Tab.Screen name="Packs">
-        {() => <PlaceholderScreen label="Content Packs" />}
+        {() => <PlaceholderScreen label="Offline Content Packs & Sync" phase="Phase 4" />}
       </Tab.Screen>
       <Tab.Screen name="Settings">
-        {() => <PlaceholderScreen label="Settings" />}
+        {() => <PlaceholderScreen label="Settings & Depth Preferences" phase="Phase 3" />}
       </Tab.Screen>
     </Tab.Navigator>
   );
