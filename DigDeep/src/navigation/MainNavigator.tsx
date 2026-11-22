@@ -8,6 +8,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, View, StyleSheet } from 'react-native';
 
 import AtlasNavigator from './AtlasNavigator';
+import LogbookNavigator from './LogbookNavigator';
 import { COLORS, TYPOGRAPHY } from '../theme';
 import type { MainTabParamList } from '../types';
 
@@ -42,9 +43,7 @@ export default function MainNavigator() {
       })}
     >
       <Tab.Screen name="Atlas" component={AtlasNavigator} />
-      <Tab.Screen name="Logbook">
-        {() => <PlaceholderScreen label="Personal Field Logbook" phase="Phase 3" />}
-      </Tab.Screen>
+      <Tab.Screen name="Logbook" component={LogbookNavigator} />
       <Tab.Screen name="Packs">
         {() => <PlaceholderScreen label="Offline Content Packs & Sync" phase="Phase 4" />}
       </Tab.Screen>

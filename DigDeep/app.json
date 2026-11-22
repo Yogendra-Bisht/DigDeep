@@ -7,7 +7,14 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yogendrabisht.digdeep",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "DigDeep uses GPS to tag your field observations.",
+        "NSPhotoLibraryUsageDescription": "DigDeep saves Explorer Field Cards to your photo library.",
+        "NSCameraUsageDescription": "DigDeep needs camera to capture field discoveries.",
+        "NSPhotoLibraryAddUsageDescription": "DigDeep saves Explorer Field Cards to your photo library."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -16,13 +23,46 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.yogendrabisht.digdeep",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "WRITE_EXTERNAL_STORAGE",
+        "CAMERA"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "DigDeep needs camera to capture field discoveries.",
+          "microphonePermission": false,
+          "photosPermission": "DigDeep accesses your photos to attach to field logbook entries."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "DigDeep uses GPS to tag your field observations.",
+          "isIosBackgroundLocationEnabled": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "DigDeep saves Explorer Field Cards to your photo library.",
+          "savePhotosPermission": "DigDeep saves Explorer Field Cards to your photo library.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
     ]
   }
 }

@@ -175,3 +175,8 @@ export type AtlasStackParamList = {
   ArtifactDetective: { caseId: string };
   StratigraphyDig: { siteId: string };
 };
+
+export type LogbookStackParamList = {
+  LogbookMain: undefined;
+  FieldCardExport: { entryId: string };
+};
