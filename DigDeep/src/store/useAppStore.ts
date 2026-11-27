@@ -32,6 +32,7 @@ interface AppState {
   // Actions
   hydrateFromStorage: () => void;
   completeOnboarding: (worldId: WorldId, depthMode: DepthMode) => void;
+  returnToHome: () => void;
   setDepthMode: (mode: DepthMode) => void;
   setSelectedWorld: (worldId: WorldId) => void;
   setAtlasNodes: (nodes: AtlasNode[]) => void;
@@ -55,17 +56,26 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   completeOnboarding: (worldId, depthMode) => {
+    const existing = get().profile;
     const now = new Date().toISOString();
     const profile: UserProfile = {
-      id: generateId(),
+      id: existing?.id || generateId(),
       selectedWorld: worldId,
       depthMode,
       onboardingComplete: true,
-      createdAt: now,
+      createdAt: existing?.createdAt || now,
       updatedAt: now,
     };
     saveUserProfile(profile);
     set({ profile });
+  },
+
+  returnToHome: () => {
+    set((state) => ({
+      profile: state.profile
+        ? { ...state.profile, onboardingComplete: false }
+        : null,
+    }));
   },
 
   setDepthMode: (mode) => {
