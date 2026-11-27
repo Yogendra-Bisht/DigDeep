@@ -1,7 +1,10 @@
 // ============================================================
-// DigDeep — Node Detail & 4-Layer Content Reader Screen (FR2.2)
-// Sequential 4-layer drawer (Hook → Why → Evidence → Investigate)
-// with live depth toggle and interactive challenge launches.
+// DigDeep — Site Codex & Illustrated Book Reader Screen
+// Sections:
+//   1. Overview — Single long-form illuminated manuscript page
+//   2. Gallery  — Curated watercolor plates with fullscreen lightbox
+//   3. Facts    — Bite-sized archaeological curiosities & secrets
+//   4. Explore  — Era, key figures, interactive labs & linked sites
 // ============================================================
 
 import React, { useState, useEffect } from 'react';
@@ -11,61 +14,73 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   StatusBar,
+  Image,
+  Modal,
+  Dimensions,
+  Platform,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { useAppStore } from '../../store/useAppStore';
 import { markLayerComplete, getCompletedLayers } from '../../storage/database';
-import { COLORS, TYPOGRAPHY, RADII, SPACING } from '../../theme';
-import type {
-  AtlasStackParamList,
-  AtlasNode,
-  DepthMode,
-  NodeLayer,
-} from '../../types';
+import { COLORS, TYPOGRAPHY, RADII, PARCHMENT, FONTS } from '../../theme';
+import { NODE_PAINTINGS, type PaintingPlate } from '../../assets/paintings';
+import { getSiteCodexEntry } from '../../data/siteCodexData';
+import AncientBookPage from '../../components/AncientBookPage';
+import type { AtlasStackParamList, DepthMode } from '../../types';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type RouteProps = RouteProp<AtlasStackParamList, 'NodeDetail'>;
 type NavProps = NativeStackNavigationProp<AtlasStackParamList, 'NodeDetail'>;
 
-const LAYER_CONFIG = [
-  { index: 1, label: 'Hook', icon: '🪝', color: COLORS.layerHook, subtitle: '60-Sec Mystery' },
-  { index: 2, label: 'Why', icon: '💡', color: COLORS.layerWhy, subtitle: 'Core Mechanism' },
-  { index: 3, label: 'Evidence', icon: '🧪', color: COLORS.layerEvidence, subtitle: 'Lab & Excavation Data' },
-  { index: 4, label: 'Investigate', icon: '🔭', color: COLORS.layerInvestigate, subtitle: 'Interactive Case' },
+type CodexSection = 'overview' | 'gallery' | 'facts' | 'explore';
+
+const SECTIONS: { id: CodexSection; index: number; label: string; icon: string; color: string }[] = [
+  { id: 'overview', index: 1, label: 'Overview', icon: '📜', color: COLORS.layerHook },
+  { id: 'gallery', index: 2, label: 'Gallery', icon: '🖼️', color: COLORS.layerWhy },
+  { id: 'facts', index: 3, label: 'Facts', icon: '✨', color: COLORS.layerEvidence },
+  { id: 'explore', index: 4, label: 'Explore', icon: '🧭', color: COLORS.layerInvestigate },
 ];
 
 export default function NodeDetailScreen() {
   const route = useRoute<RouteProps>();
   const navigation = useNavigation<NavProps>();
   const { nodeId } = route.params;
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 24 : 0);
 
   const { atlasNodes, profile, setDepthMode, updateNodeState } = useAppStore();
-  const [activeLayerIndex, setActiveLayerIndex] = useState<number>(1);
-  const [completedLayers, setCompletedLayers] = useState<number[]>([]);
+  const [activeSection, setActiveSection] = useState<CodexSection>('overview');
+  const [completedSections, setCompletedSections] = useState<number[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
-  // Find target node
-  const node = atlasNodes.find((n) => n.id === nodeId);
+  // Find target node & adjacent nodes for Back/Forward navigation
+  const currentIndex = atlasNodes.findIndex((n) => n.id === nodeId);
+  const node = currentIndex >= 0 ? atlasNodes[currentIndex] : undefined;
+  const prevNode = currentIndex > 0 ? atlasNodes[currentIndex - 1] : null;
+  const nextNode = currentIndex >= 0 && currentIndex < atlasNodes.length - 1 ? atlasNodes[currentIndex + 1] : null;
   const depthMode: DepthMode = profile?.depthMode || 'intuitive';
 
-  // Load completed layers from SQLite
   useEffect(() => {
+    setActiveSection('overview');
+    setLightboxIndex(null);
     const done = getCompletedLayers(nodeId);
-    setCompletedLayers(done);
-    // Mark layer 1 visited automatically
+    setCompletedSections(done);
     if (!done.includes(1)) {
       markLayerComplete(nodeId, 1);
-      setCompletedLayers((prev) => [...prev, 1]);
+      setCompletedSections((prev) => [...prev, 1]);
     }
   }, [nodeId]);
 
   if (!node) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Node not found</Text>
+          <Text style={styles.errorText}>Site not found in Atlas</Text>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Text style={styles.backButtonText}>← Return to Atlas</Text>
           </TouchableOpacity>
@@ -74,40 +89,75 @@ export default function NodeDetailScreen() {
     );
   }
 
-  // Handle layer navigation
-  function handleSelectLayer(index: number) {
-    setActiveLayerIndex(index);
-    if (!completedLayers.includes(index)) {
-      markLayerComplete(nodeId, index);
-      const updated = [...completedLayers, index];
-      setCompletedLayers(updated);
+  const codex = getSiteCodexEntry(node.id);
+  const primaryPlate = NODE_PAINTINGS[node.id] || codex.gallery[0];
+  const sectionIdx = SECTIONS.findIndex((s) => s.id === activeSection);
 
-      // If all 4 layers completed, mark node as mastered
+  function handleSelectSection(sectionId: CodexSection) {
+    setActiveSection(sectionId);
+    const meta = SECTIONS.find((s) => s.id === sectionId);
+    if (meta && !completedSections.includes(meta.index)) {
+      markLayerComplete(nodeId, meta.index);
+      const updated = [...completedSections, meta.index];
+      setCompletedSections(updated);
       if (updated.length >= 4) {
         updateNodeState(nodeId, 'mastered');
       }
     }
   }
 
-  const activeLayer = node.layers.find((l) => l.layerIndex === activeLayerIndex) || node.layers[0];
-  const activeLayerMeta = LAYER_CONFIG[activeLayerIndex - 1];
+  // Combine all 4 layers into one rich, long-form overview narrative
+  const combinedOverviewBody = node.layers
+    .map((layer) =>
+      depthMode === 'intuitive' ? layer.contentIntuitive : layer.contentDeepDive
+    )
+    .join('\n\n');
 
-  // Action for Layer 4 interactive challenge
+  // Check if node has an interactive simulator (Artifact Detective or Stratigraphy Dig)
+  const interactiveLayer = node.layers.find(
+    (l) => l.interactiveType === 'artifact' || l.interactiveType === 'dig'
+  );
+
   function handleLaunchInteractive() {
-    if (activeLayer.interactiveType === 'artifact') {
-      const caseId = activeLayer.interactiveRefId || 'case-amphora-01';
+    if (!interactiveLayer) return;
+    if (interactiveLayer.interactiveType === 'artifact') {
+      const caseId = interactiveLayer.interactiveRefId || 'case-amphora-01';
       navigation.navigate('ArtifactDetective', { caseId });
-    } else if (activeLayer.interactiveType === 'dig') {
+    } else if (interactiveLayer.interactiveType === 'dig') {
       navigation.navigate('StratigraphyDig', { siteId: nodeId });
     }
   }
 
-  return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" />
+  // Connected nodes for Explore section
+  const connectedNodes = atlasNodes.filter((n) => node.connections.includes(n.id));
 
-      {/* Top Header */}
-      <View style={styles.header}>
+  // Page-turner handlers
+  const handlePrev =
+    sectionIdx > 0
+      ? () => handleSelectSection(SECTIONS[sectionIdx - 1].id)
+      : prevNode
+      ? () => navigation.replace('NodeDetail', { nodeId: prevNode.id })
+      : undefined;
+
+  const handleNext =
+    sectionIdx < SECTIONS.length - 1
+      ? () => handleSelectSection(SECTIONS[sectionIdx + 1].id)
+      : nextNode
+      ? () => navigation.replace('NodeDetail', { nodeId: nextNode.id })
+      : undefined;
+
+  const prevLabel = sectionIdx > 0 ? `← ${SECTIONS[sectionIdx - 1].label}` : '← Prev Site';
+  const nextLabel =
+    sectionIdx < SECTIONS.length - 1
+      ? `${SECTIONS[sectionIdx + 1].label} →`
+      : 'Next Site →';
+
+  return (
+    <View style={styles.safe}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.bgSurface} translucent />
+
+      {/* Top Header with Back, Depth Toggle & Next Site */}
+      <View style={[styles.header, { paddingTop: topInset + 8 }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
@@ -151,6 +201,15 @@ export default function NodeDetailScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          onPress={() => nextNode && navigation.replace('NodeDetail', { nodeId: nextNode.id })}
+          disabled={!nextNode}
+          style={[styles.backButton, !nextNode && { opacity: 0.35 }]}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.backButtonText}>Next →</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Node Info Banner */}
@@ -158,127 +217,323 @@ export default function NodeDetailScreen() {
         <Text style={styles.nodeBannerEmoji}>{node.emoji}</Text>
         <View style={styles.nodeBannerContent}>
           <Text style={styles.nodeBannerTitle}>{node.title}</Text>
-          <Text style={styles.nodeBannerSub}>{node.subtitle}</Text>
+          <Text style={styles.nodeBannerSub}>{codex.era} · {codex.location}</Text>
         </View>
       </View>
 
-      {/* 4-Layer Progression Tabs */}
-      <View style={styles.layerTabsContainer}>
-        {LAYER_CONFIG.map((layer) => {
-          const isActive = activeLayerIndex === layer.index;
-          const isDone = completedLayers.includes(layer.index);
+      {/* 4 Section Tabs: Overview | Gallery | Facts | Explore */}
+      <View style={styles.sectionTabsContainer}>
+        {SECTIONS.map((sec) => {
+          const isActive = activeSection === sec.id;
+          const isDone = completedSections.includes(sec.index);
 
           return (
             <TouchableOpacity
-              key={layer.index}
+              key={sec.id}
               style={[
-                styles.layerTab,
+                styles.sectionTab,
                 isActive && {
-                  borderColor: layer.color,
+                  borderColor: sec.color,
                   backgroundColor: COLORS.cardSelected,
                 },
               ]}
-              onPress={() => handleSelectLayer(layer.index)}
+              onPress={() => handleSelectSection(sec.id)}
               activeOpacity={0.75}
             >
-              <View style={styles.layerTabTop}>
-                <Text style={styles.layerTabIcon}>{layer.icon}</Text>
-                {isDone && <Text style={styles.layerDoneBadge}>✓</Text>}
+              <View style={styles.sectionTabTop}>
+                <Text style={styles.sectionTabIcon}>{sec.icon}</Text>
+                {isDone && <Text style={styles.sectionDoneBadge}>✓</Text>}
               </View>
               <Text
                 style={[
-                  styles.layerTabLabel,
-                  isActive && { color: layer.color, fontWeight: 'bold' },
+                  styles.sectionTabLabel,
+                  isActive && { color: sec.color, fontWeight: 'bold' },
                 ]}
               >
-                {layer.label}
+                {sec.label}
               </Text>
             </TouchableOpacity>
           );
         })}
       </View>
 
-      {/* Active Layer Content Reader */}
+      {/* Ancient Illuminated Book Reader */}
       <ScrollView
         contentContainerStyle={styles.contentScroll}
         showsVerticalScrollIndicator={false}
       >
-        {/* Layer Header Badge */}
-        <View
-          style={[
-            styles.activeLayerBadge,
-            { backgroundColor: activeLayerMeta.color + '22', borderColor: activeLayerMeta.color },
-          ]}
-        >
-          <Text style={[styles.activeLayerBadgeText, { color: activeLayerMeta.color }]}>
-            LAYER {activeLayerMeta.index}: {activeLayerMeta.label.toUpperCase()} — {activeLayerMeta.subtitle}
-          </Text>
-        </View>
-
-        {/* Content Body Based on Active Depth Mode */}
-        <View style={styles.contentBodyCard}>
-          <Text style={styles.contentBodyText}>
-            {depthMode === 'intuitive'
-              ? activeLayer.contentIntuitive
-              : activeLayer.contentDeepDive}
-          </Text>
-
-          {/* Depth Mode indicator note */}
-          <View style={styles.depthModeIndicator}>
-            <Text style={styles.depthModeIndicatorText}>
-              {depthMode === 'intuitive'
-                ? '🌱 Viewing in Intuitive Explorer Mode'
-                : '🔬 Viewing in Deep Dive Researcher Mode'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Interactive Launch Button (for Layer 4 or nodes with challenges) */}
-        {activeLayer.interactiveType && (
-          <View style={styles.interactiveCard}>
-            <Text style={styles.interactiveTitle}>
-              {activeLayer.interactiveType === 'artifact' && '🔍 Artifact Detective Ready'}
-              {activeLayer.interactiveType === 'dig' && '⛏️ Stratigraphy Dig Simulation'}
-              {activeLayer.interactiveType === 'field_prompt' && '📓 Local Field Log Prompt'}
-              {activeLayer.interactiveType === 'quiz' && '💡 Mystery Deduction Challenge'}
-            </Text>
-            <Text style={styles.interactiveDesc}>
-              {activeLayer.interactiveType === 'artifact' &&
-                'Examine high-resolution artifact details, inspect wear patterns, and formulate trade hypotheses.'}
-              {activeLayer.interactiveType === 'dig' &&
-                'Swipe through stratigraphic earth layers and sequence diagnostic artifacts.'}
-              {activeLayer.interactiveType === 'field_prompt' &&
-                'Head outside to observe architectural features in your area and record a Field Log card.'}
-              {activeLayer.interactiveType === 'quiz' &&
-                'Test your archaeological deduction against historical evidence.'}
-            </Text>
-
-            {activeLayer.interactiveType === 'artifact' && (
-              <TouchableOpacity
-                style={[styles.launchBtn, { backgroundColor: COLORS.accent }]}
-                onPress={handleLaunchInteractive}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.launchBtnText}>Launch Artifact Detective →</Text>
-              </TouchableOpacity>
+        {/* SECTION 1: OVERVIEW (Single Long-Form Illustrated Page) */}
+        {activeSection === 'overview' && (
+          <AncientBookPage
+            folioTitle={node.title}
+            folioSubtitle={`${codex.era} · ${codex.location}`}
+            plate={primaryPlate}
+            badgeText="SITE OVERVIEW · COMPLETE CODEX"
+            badgeColor={PARCHMENT.rubric}
+            bodyText={combinedOverviewBody}
+            modeLabel={
+              depthMode === 'intuitive'
+                ? '🌱 Intuitive Explorer Edition'
+                : '🔬 Deep Dive Researcher Edition'
+            }
+            pageIndicator="Folio I / IV"
+            onPrevPage={handlePrev}
+            prevLabel={prevLabel}
+            onNextPage={handleNext}
+            nextLabel={nextLabel}
+          >
+            {interactiveLayer && (
+              <View style={styles.interactiveParchmentBox}>
+                <Text style={styles.interactiveParchmentTitle}>
+                  {interactiveLayer.interactiveType === 'artifact'
+                    ? '🔍 Inspect Site Artifact Plate'
+                    : '⛏️ Enter Stratigraphy Trench'}
+                </Text>
+                <Text style={styles.interactiveParchmentDesc}>
+                  {interactiveLayer.interactiveType === 'artifact'
+                    ? 'Launch the interactive Artifact Detective lab to examine surface hotspots on this site’s specimen.'
+                    : 'Excavate the soil strata layer-by-layer in the Stratigraphy Simulator.'}
+                </Text>
+                <TouchableOpacity
+                  style={styles.launchBtn}
+                  onPress={handleLaunchInteractive}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.launchBtnText}>
+                    {interactiveLayer.interactiveType === 'artifact'
+                      ? 'Open Artifact Detective →'
+                      : 'Launch Dig Simulator →'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             )}
-          </View>
+          </AncientBookPage>
         )}
 
-        {/* Next Layer CTA */}
-        {activeLayerIndex < 4 && (
-          <TouchableOpacity
-            style={styles.nextLayerBtn}
-            onPress={() => handleSelectLayer(activeLayerIndex + 1)}
-            activeOpacity={0.8}
+        {/* SECTION 2: IMAGE & PAINTING GALLERY */}
+        {activeSection === 'gallery' && (
+          <AncientBookPage
+            folioTitle={`${node.title}`}
+            folioSubtitle={`Archival Paintings & Field Illustrations (${codex.gallery.length} Plates)`}
+            badgeText="ILLUMINATED ART GALLERY"
+            badgeColor={PARCHMENT.goldLeaf}
+            bodyText="Each watercolour plate below was drawn in the spirit of 19th-century field expedition notebooks. Tap any framed painting to inspect it in full-screen museum detail."
+            pageIndicator="Folio II / IV"
+            onPrevPage={handlePrev}
+            prevLabel={prevLabel}
+            onNextPage={handleNext}
+            nextLabel={nextLabel}
           >
-            <Text style={styles.nextLayerBtnText}>
-              Next: Layer {activeLayerIndex + 1} ({LAYER_CONFIG[activeLayerIndex].label}) →
-            </Text>
-          </TouchableOpacity>
+            <View style={styles.galleryGrid}>
+              {codex.gallery.map((item: PaintingPlate, idx: number) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.galleryCard}
+                  activeOpacity={0.9}
+                  onPress={() => setLightboxIndex(idx)}
+                >
+                  <View style={styles.galleryCardHeader}>
+                    <Text style={styles.galleryPlateNum}>{item.plateNumber}</Text>
+                    <Text style={styles.galleryZoomHint}>🔍 Tap to zoom</Text>
+                  </View>
+                  <View style={styles.galleryImageFrame}>
+                    <Image
+                      source={item.source}
+                      style={styles.galleryImage}
+                      resizeMode="cover"
+                    />
+                  </View>
+                  <Text style={styles.galleryCaption}>{item.caption}</Text>
+                  <Text style={styles.galleryNote}>✍ {item.curatorNote}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </AncientBookPage>
+        )}
+
+        {/* SECTION 3: INTERESTING FACTS */}
+        {activeSection === 'facts' && (
+          <AncientBookPage
+            folioTitle={node.title}
+            folioSubtitle="Curiosities, Field Secrets & Surprising Discoveries"
+            badgeText="CURIOSITIES & FACTS"
+            badgeColor={PARCHMENT.rubric}
+            bodyText={`Collected from excavation diaries, laboratory forensics, and epigraphic archives at ${node.title}.`}
+            modeLabel={
+              depthMode === 'intuitive'
+                ? '🌱 Intuitive Explorer Facts'
+                : '🔬 Deep Dive Technical Facts'
+            }
+            pageIndicator="Folio III / IV"
+            onPrevPage={handlePrev}
+            prevLabel={prevLabel}
+            onNextPage={handleNext}
+            nextLabel={nextLabel}
+          >
+            <View style={styles.factsList}>
+              {codex.facts.map((fact, idx) => (
+                <View key={idx} style={styles.factCard}>
+                  <View style={styles.factHeader}>
+                    <View style={styles.factSeal}>
+                      <Text style={styles.factSealNum}>{idx + 1}</Text>
+                    </View>
+                    <Text style={styles.factTitle}>{fact.title}</Text>
+                  </View>
+                  <Text style={styles.factBody}>
+                    {depthMode === 'intuitive' ? fact.intuitive : fact.deepDive}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </AncientBookPage>
+        )}
+
+        {/* SECTION 4: EXPLORE (Timeline, Key Figures, Highlights & Linked Sites) */}
+        {activeSection === 'explore' && (
+          <AncientBookPage
+            folioTitle={node.title}
+            folioSubtitle="Chronology, Key Excavators & Connected Atlas Sites"
+            badgeText="FIELD DOSSIER & CONNECTIONS"
+            badgeColor={PARCHMENT.inkPrimary}
+            bodyText={node.subtitle}
+            pageIndicator="Folio IV / IV"
+            onPrevPage={handlePrev}
+            prevLabel={prevLabel}
+            onNextPage={handleNext}
+            nextLabel={nextLabel}
+          >
+            {/* Dossier Metadata */}
+            <View style={styles.dossierBox}>
+              <View style={styles.dossierRow}>
+                <Text style={styles.dossierLabel}>Chronology:</Text>
+                <Text style={styles.dossierValue}>{codex.era}</Text>
+              </View>
+              <View style={styles.dossierRow}>
+                <Text style={styles.dossierLabel}>Region:</Text>
+                <Text style={styles.dossierValue}>{codex.location}</Text>
+              </View>
+              <View style={styles.dossierRow}>
+                <Text style={styles.dossierLabel}>Key Figures:</Text>
+                <Text style={styles.dossierValue}>{codex.keyFigure}</Text>
+              </View>
+            </View>
+
+            {/* Key Takeaways */}
+            <View style={styles.highlightsBox}>
+              <Text style={styles.highlightsHeading}>✦ Key Archaeological Takeaways</Text>
+              {codex.highlights.map((pt, i) => (
+                <View key={i} style={styles.highlightRow}>
+                  <Text style={styles.highlightBullet}>◆</Text>
+                  <Text style={styles.highlightText}>{pt}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Interactive Lab Launcher */}
+            {interactiveLayer && (
+              <View style={styles.interactiveParchmentBox}>
+                <Text style={styles.interactiveParchmentTitle}>
+                  {interactiveLayer.interactiveType === 'artifact'
+                    ? '🔍 Artifact Detective Suite'
+                    : '⛏️ Stratigraphy Dig Simulator'}
+                </Text>
+                <Text style={styles.interactiveParchmentDesc}>
+                  Put your knowledge into practice with this site’s interactive lab.
+                </Text>
+                <TouchableOpacity
+                  style={styles.launchBtn}
+                  onPress={handleLaunchInteractive}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.launchBtnText}>
+                    {interactiveLayer.interactiveType === 'artifact'
+                      ? 'Open Artifact Detective →'
+                      : 'Launch Dig Simulator →'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Connected Atlas Sites */}
+            {connectedNodes.length > 0 && (
+              <View style={styles.connectedSection}>
+                <Text style={styles.connectedHeading}>🗺️ Connected Sites on the Atlas</Text>
+                <View style={styles.connectedChips}>
+                  {connectedNodes.map((cn) => (
+                    <TouchableOpacity
+                      key={cn.id}
+                      style={styles.connectedChip}
+                      onPress={() => navigation.replace('NodeDetail', { nodeId: cn.id })}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={styles.connectedChipEmoji}>{cn.emoji}</Text>
+                      <Text style={styles.connectedChipText}>{cn.title} →</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+          </AncientBookPage>
         )}
       </ScrollView>
-    </SafeAreaView>
+
+      {/* Gallery Fullscreen Lightbox Modal with Prev/Next */}
+      {lightboxIndex !== null && codex.gallery[lightboxIndex] && (
+        <Modal
+          visible={true}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setLightboxIndex(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalPlateNum}>
+                {codex.gallery[lightboxIndex].plateNumber} ({lightboxIndex + 1} / {codex.gallery.length})
+              </Text>
+              <Image
+                source={codex.gallery[lightboxIndex].source}
+                style={styles.modalImage}
+                resizeMode="contain"
+              />
+              <Text style={styles.modalCaption}>
+                {codex.gallery[lightboxIndex].caption}
+              </Text>
+              <Text style={styles.modalNote}>
+                ✍ {codex.gallery[lightboxIndex].curatorNote}
+              </Text>
+
+              <View style={styles.modalNavRow}>
+                <TouchableOpacity
+                  style={[styles.modalNavBtn, lightboxIndex === 0 && { opacity: 0.35 }]}
+                  disabled={lightboxIndex === 0}
+                  onPress={() => setLightboxIndex(lightboxIndex - 1)}
+                >
+                  <Text style={styles.modalNavText}>← Prev</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.modalCloseBtn}
+                  onPress={() => setLightboxIndex(null)}
+                >
+                  <Text style={styles.modalCloseText}>Close ✕</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.modalNavBtn,
+                    lightboxIndex === codex.gallery.length - 1 && { opacity: 0.35 },
+                  ]}
+                  disabled={lightboxIndex === codex.gallery.length - 1}
+                  onPress={() => setLightboxIndex(lightboxIndex + 1)}
+                >
+                  <Text style={styles.modalNavText}>Next →</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+    </View>
   );
 }
 
@@ -291,7 +546,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
@@ -299,11 +554,11 @@ const styles = StyleSheet.create({
   },
   backButton: {
     paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
   },
   backButtonText: {
     color: COLORS.sand,
-    fontSize: TYPOGRAPHY.base,
+    fontSize: TYPOGRAPHY.sm,
     fontWeight: TYPOGRAPHY.weightSemiBold,
   },
   depthToggleBox: {
@@ -337,19 +592,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     backgroundColor: COLORS.cardActive,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   nodeBannerEmoji: {
-    fontSize: 34,
+    fontSize: 32,
   },
   nodeBannerContent: {
     flex: 1,
   },
   nodeBannerTitle: {
+    fontFamily: FONTS.serif,
     fontSize: TYPOGRAPHY.lg,
     fontWeight: TYPOGRAPHY.weightBold,
     color: COLORS.textPrimary,
@@ -360,130 +616,358 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Layer Navigation Tabs
-  layerTabsContainer: {
+  // Section Tabs
+  sectionTabsContainer: {
     flexDirection: 'row',
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 9,
     backgroundColor: COLORS.bgSurface,
     gap: 8,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  layerTab: {
+  sectionTab: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 7,
     paddingHorizontal: 6,
     borderRadius: RADII.sm,
     backgroundColor: COLORS.cardLocked,
     borderWidth: 1.5,
     borderColor: COLORS.border,
     alignItems: 'center',
+    gap: 3,
   },
-  layerTabTop: {
+  sectionTabTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 2,
   },
-  layerTabIcon: {
-    fontSize: 14,
+  sectionTabIcon: {
+    fontSize: 15,
   },
-  layerDoneBadge: {
+  sectionDoneBadge: {
     fontSize: 10,
-    color: COLORS.moss,
+    color: COLORS.nodeMastered,
     fontWeight: 'bold',
   },
-  layerTabLabel: {
-    fontSize: TYPOGRAPHY.xs,
+  sectionTabLabel: {
+    fontSize: 11,
     color: COLORS.textSecondary,
+    fontWeight: TYPOGRAPHY.weightMedium,
   },
 
-  // Scroll Content
+  // Scroll
   contentScroll: {
-    padding: 20,
+    padding: 16,
     paddingBottom: 40,
+  },
+
+  // Gallery inside Parchment
+  galleryGrid: {
+    marginTop: 14,
     gap: 16,
   },
-  activeLayerBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+  galleryCard: {
+    backgroundColor: PARCHMENT.paperDark,
+    borderRadius: RADII.sm,
+    borderWidth: 1.5,
+    borderColor: PARCHMENT.borderDouble,
+    padding: 10,
+  },
+  galleryCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  galleryPlateNum: {
+    fontFamily: FONTS.handwriting,
+    fontSize: 18,
+    color: PARCHMENT.rubric,
+  },
+  galleryZoomHint: {
+    fontFamily: FONTS.serif,
+    fontSize: 11,
+    color: PARCHMENT.inkMuted,
+  },
+  galleryImageFrame: {
+    borderWidth: 1.5,
+    borderColor: PARCHMENT.borderDouble,
+    padding: 3,
+    backgroundColor: PARCHMENT.paper,
+    borderRadius: 4,
+  },
+  galleryImage: {
+    width: '100%',
+    height: 185,
+    borderRadius: 2,
+  },
+  galleryCaption: {
+    fontFamily: FONTS.serif,
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: PARCHMENT.inkPrimary,
+    marginTop: 8,
+  },
+  galleryNote: {
+    fontFamily: FONTS.handwriting,
+    fontSize: 16,
+    color: PARCHMENT.inkSecondary,
+    marginTop: 3,
+    lineHeight: 21,
+  },
+
+  // Facts inside Parchment
+  factsList: {
+    marginTop: 14,
+    gap: 12,
+  },
+  factCard: {
+    backgroundColor: PARCHMENT.paperDark,
     borderRadius: RADII.sm,
     borderWidth: 1,
+    borderColor: PARCHMENT.border,
+    borderLeftWidth: 3.5,
+    borderLeftColor: PARCHMENT.rubric,
+    padding: 12,
+    gap: 6,
   },
-  activeLayerBadgeText: {
-    fontSize: TYPOGRAPHY.xs,
-    fontWeight: TYPOGRAPHY.weightBold,
+  factHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  contentBodyCard: {
-    backgroundColor: COLORS.cardActive,
-    borderRadius: RADII.md,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    gap: 16,
+  factSeal: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: PARCHMENT.rubric,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  contentBodyText: {
-    fontSize: TYPOGRAPHY.base,
-    color: COLORS.textPrimary,
-    lineHeight: 24,
+  factSealNum: {
+    color: PARCHMENT.paperHighlight,
+    fontFamily: FONTS.serif,
+    fontSize: 12,
+    fontWeight: 'bold',
   },
-  depthModeIndicator: {
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+  factTitle: {
+    flex: 1,
+    fontFamily: FONTS.handwriting,
+    fontSize: 20,
+    color: PARCHMENT.inkPrimary,
   },
-  depthModeIndicatorText: {
-    fontSize: TYPOGRAPHY.xs,
-    color: COLORS.textMuted,
-    fontStyle: 'italic',
+  factBody: {
+    fontFamily: FONTS.serif,
+    fontSize: 14,
+    lineHeight: 22,
+    color: PARCHMENT.inkSecondary,
   },
 
-  // Interactive Card
-  interactiveCard: {
-    backgroundColor: COLORS.cardSelected,
-    borderRadius: RADII.md,
-    padding: 18,
+  // Explore Dossier inside Parchment
+  dossierBox: {
+    marginTop: 14,
+    backgroundColor: PARCHMENT.paperDark,
+    borderRadius: RADII.sm,
     borderWidth: 1,
-    borderColor: COLORS.sand,
+    borderColor: PARCHMENT.border,
+    padding: 12,
     gap: 8,
   },
-  interactiveTitle: {
-    fontSize: TYPOGRAPHY.md,
-    fontWeight: TYPOGRAPHY.weightBold,
-    color: COLORS.sand,
+  dossierRow: {
+    flexDirection: 'row',
+    gap: 8,
   },
-  interactiveDesc: {
-    fontSize: TYPOGRAPHY.xs,
-    color: COLORS.textSecondary,
+  dossierLabel: {
+    fontFamily: FONTS.serif,
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: PARCHMENT.rubric,
+    width: 92,
+  },
+  dossierValue: {
+    flex: 1,
+    fontFamily: FONTS.serif,
+    fontSize: 12.5,
+    color: PARCHMENT.inkPrimary,
     lineHeight: 18,
+  },
+  highlightsBox: {
+    marginTop: 14,
+    gap: 8,
+  },
+  highlightsHeading: {
+    fontFamily: FONTS.handwriting,
+    fontSize: 20,
+    color: PARCHMENT.rubric,
+  },
+  highlightRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'flex-start',
+  },
+  highlightBullet: {
+    color: PARCHMENT.goldLeaf,
+    fontSize: 12,
+    marginTop: 3,
+  },
+  highlightText: {
+    flex: 1,
+    fontFamily: FONTS.serif,
+    fontSize: 14,
+    lineHeight: 21,
+    color: PARCHMENT.inkPrimary,
+  },
+  connectedSection: {
+    marginTop: 16,
+    gap: 8,
+  },
+  connectedHeading: {
+    fontFamily: FONTS.handwriting,
+    fontSize: 20,
+    color: PARCHMENT.inkPrimary,
+  },
+  connectedChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  connectedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: PARCHMENT.paperDark,
+    borderWidth: 1,
+    borderColor: PARCHMENT.borderDouble,
+    borderRadius: RADII.full,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  connectedChipEmoji: {
+    fontSize: 14,
+  },
+  connectedChipText: {
+    fontFamily: FONTS.serif,
+    fontSize: 12,
+    fontWeight: '700',
+    color: PARCHMENT.inkPrimary,
+  },
+
+  // Interactive Launch Card
+  interactiveParchmentBox: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: RADII.sm,
+    backgroundColor: PARCHMENT.paperDark,
+    borderWidth: 1.5,
+    borderColor: PARCHMENT.goldLeaf,
+    gap: 6,
+  },
+  interactiveParchmentTitle: {
+    fontFamily: FONTS.handwriting,
+    fontSize: 20,
+    color: PARCHMENT.rubric,
+  },
+  interactiveParchmentDesc: {
+    fontFamily: FONTS.serif,
+    fontSize: 13,
+    color: PARCHMENT.inkSecondary,
+    lineHeight: 20,
   },
   launchBtn: {
     marginTop: 8,
     borderRadius: RADII.sm,
-    paddingVertical: 12,
+    paddingVertical: 11,
     alignItems: 'center',
+    backgroundColor: PARCHMENT.rubric,
+    borderWidth: 1,
+    borderColor: PARCHMENT.waxSeal,
   },
   launchBtnText: {
-    fontSize: TYPOGRAPHY.sm,
+    fontFamily: FONTS.serif,
+    fontSize: 13,
     fontWeight: TYPOGRAPHY.weightBold,
-    color: '#fff',
+    color: PARCHMENT.paperHighlight,
   },
 
-  // Next CTA
-  nextLayerBtn: {
-    borderRadius: RADII.sm,
-    paddingVertical: 14,
+  // Lightbox Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 13, 10, 0.9)',
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.cardActive,
-    borderWidth: 1,
-    borderColor: COLORS.borderActive,
+    padding: 18,
   },
-  nextLayerBtnText: {
-    fontSize: TYPOGRAPHY.sm,
-    color: COLORS.sand,
-    fontWeight: TYPOGRAPHY.weightSemiBold,
+  modalCard: {
+    width: '100%',
+    backgroundColor: PARCHMENT.paper,
+    borderRadius: RADII.md,
+    borderWidth: 2,
+    borderColor: PARCHMENT.goldLeaf,
+    padding: 16,
+    alignItems: 'center',
+  },
+  modalPlateNum: {
+    fontFamily: FONTS.handwriting,
+    fontSize: 22,
+    color: PARCHMENT.rubric,
+    marginBottom: 8,
+  },
+  modalImage: {
+    width: SCREEN_WIDTH - 72,
+    height: 270,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: PARCHMENT.borderDouble,
+  },
+  modalCaption: {
+    fontFamily: FONTS.serif,
+    fontSize: 14,
+    fontWeight: '700',
+    color: PARCHMENT.inkPrimary,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  modalNote: {
+    fontFamily: FONTS.handwriting,
+    fontSize: 17,
+    color: PARCHMENT.inkSecondary,
+    textAlign: 'center',
+    marginTop: 6,
+  },
+  modalNavRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginTop: 16,
+    gap: 10,
+  },
+  modalNavBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: PARCHMENT.borderDouble,
+    backgroundColor: PARCHMENT.paperDark,
+  },
+  modalNavText: {
+    fontFamily: FONTS.serif,
+    fontSize: 12,
+    fontWeight: '700',
+    color: PARCHMENT.inkPrimary,
+  },
+  modalCloseBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    backgroundColor: PARCHMENT.rubric,
+    borderRadius: 8,
+  },
+  modalCloseText: {
+    color: PARCHMENT.paperHighlight,
+    fontFamily: FONTS.serif,
+    fontWeight: '700',
+    fontSize: 12,
   },
 
   errorContainer: {

@@ -11,16 +11,19 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   Dimensions,
+  Image,
+  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { ARTIFACT_CASES } from '../../data/artifactCases';
 import { useAppStore } from '../../store/useAppStore';
-import { COLORS, TYPOGRAPHY, RADII } from '../../theme';
+import { COLORS, TYPOGRAPHY, RADII, PARCHMENT, FONTS } from '../../theme';
+import { CASE_PAINTINGS } from '../../assets/paintings';
 import type {
   AtlasStackParamList,
   ArtifactHotspot,
@@ -36,6 +39,8 @@ export default function ArtifactDetectiveScreen() {
   const route = useRoute<RouteProps>();
   const navigation = useNavigation<NavProps>();
   const { caseId } = route.params;
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight || 24 : 0);
 
   const { profile } = useAppStore();
   const depthMode = profile?.depthMode || 'intuitive';
@@ -52,6 +57,13 @@ export default function ArtifactDetectiveScreen() {
 
   // Switch between cases
   const availableCaseIds = Object.keys(ARTIFACT_CASES);
+  const currentCaseIdx = availableCaseIds.indexOf(artifactCase.id);
+  const prevCaseId = currentCaseIdx > 0 ? availableCaseIds[currentCaseIdx - 1] : null;
+  const nextCaseId =
+    currentCaseIdx >= 0 && currentCaseIdx < availableCaseIds.length - 1
+      ? availableCaseIds[currentCaseIdx + 1]
+      : null;
+  const plate = CASE_PAINTINGS[artifactCase.id];
 
   function handleSelectOption(qId: string, optId: string) {
     setAnswers((prev) => ({ ...prev, [qId]: optId }));
@@ -61,20 +73,27 @@ export default function ArtifactDetectiveScreen() {
   const allAnswered = artifactCase.hypothesisQuestions.every((q) => answers[q.id]);
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" />
+    <View style={styles.safe}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.bgSurface} translucent />
 
-      {/* Header */}
-      <View style={styles.header}>
+      {/* Header with Back & Forward Case Navigation */}
+      <View style={[styles.header, { paddingTop: topInset + 8 }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backBtn}
           activeOpacity={0.7}
         >
-          <Text style={styles.backBtnText}>← Back to Node</Text>
+          <Text style={styles.backBtnText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Artifact Detective</Text>
-        <View style={{ width: 60 }} />
+        <Text style={styles.headerTitle}>🔍 Artifact Codex</Text>
+        <TouchableOpacity
+          onPress={() => nextCaseId && navigation.replace('ArtifactDetective', { caseId: nextCaseId })}
+          disabled={!nextCaseId}
+          style={[styles.backBtn, !nextCaseId && { opacity: 0.35 }]}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.backBtnText}>Next →</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Case Selector Pills */}
@@ -108,42 +127,55 @@ export default function ArtifactDetectiveScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Artifact Title & Provenance Card */}
-        <View style={styles.metadataCard}>
-          <View style={styles.metadataHeader}>
-            <Text style={styles.metadataEmoji}>{artifactCase.emoji}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.caseTitle}>{artifactCase.title}</Text>
-              <Text style={styles.casePeriod}>{artifactCase.period}</Text>
+        {/* Artifact Title & Provenance Parchment Card */}
+        <View style={styles.parchmentCard}>
+          <View style={styles.parchmentInner}>
+            <View style={styles.metadataHeader}>
+              <Text style={styles.metadataEmoji}>{artifactCase.emoji}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.caseTitle}>{artifactCase.title}</Text>
+                <Text style={styles.casePeriod}>{artifactCase.period}</Text>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>Provenance:</Text>
-            <Text style={styles.metaValue}>{artifactCase.provenance}</Text>
-          </View>
-          <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>Material Fabric:</Text>
-            <Text style={styles.metaValue}>{artifactCase.material}</Text>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Provenance:</Text>
+              <Text style={styles.metaValue}>{artifactCase.provenance}</Text>
+            </View>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Material Fabric:</Text>
+              <Text style={styles.metaValue}>{artifactCase.material}</Text>
+            </View>
           </View>
         </View>
 
-        {/* Interactive 2D Inspection Canvas with Hotspots */}
+        {/* Interactive 2D Inspection Canvas with Painted Artifact & Hotspots */}
         <View style={styles.inspectionSection}>
-          <Text style={styles.sectionHeader}>1. High-Resolution Surface Inspection</Text>
+          <Text style={styles.sectionHeader}>1. Illuminated Plate & Surface Inspection</Text>
           <Text style={styles.sectionSub}>
-            Tap the illuminated hotspots on the artifact to analyze surface wear, inscriptions, and manufacturing marks.
+            Tap the numbered wax markers on the painted artifact to inspect wear, inscriptions, and manufacturing clues.
           </Text>
 
           <View style={styles.specimenCanvas}>
-            {/* Specimen Visual Representation */}
-            <View style={styles.specimenVisual}>
-              <Text style={styles.specimenIcon}>{artifactCase.emoji}</Text>
-              <Text style={styles.specimenCaption}>[ 360° Orthophoto Surface Model ]</Text>
+            {plate ? (
+              <Image
+                source={plate.source}
+                style={styles.specimenPainting}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.specimenVisual}>
+                <Text style={styles.specimenIcon}>{artifactCase.emoji}</Text>
+              </View>
+            )}
+            <View style={styles.plateLabelOverlay}>
+              <Text style={styles.specimenCaption}>
+                {plate ? plate.plateNumber : 'Archival Plate'} · Tap pins 1–{artifactCase.hotspots.length}
+              </Text>
             </View>
 
             {/* Hotspot Markers */}
-            {artifactCase.hotspots.map((spot) => {
+            {artifactCase.hotspots.map((spot, idx) => {
               const isSelected = selectedHotspot?.id === spot.id;
               return (
                 <TouchableOpacity
@@ -157,13 +189,13 @@ export default function ArtifactDetectiveScreen() {
                   activeOpacity={0.8}
                 >
                   <View style={styles.hotspotPulse} />
-                  <Text style={styles.hotspotNumber}>●</Text>
+                  <Text style={styles.hotspotNumber}>{idx + 1}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
 
-          {/* Active Hotspot Clue Card */}
+          {/* Active Hotspot Clue Card (Handwritten Parchment Note) */}
           {selectedHotspot && (
             <View style={styles.clueCard}>
               <View style={styles.clueCardHeader}>
@@ -267,8 +299,32 @@ export default function ArtifactDetectiveScreen() {
             </View>
           </View>
         )}
+
+        {/* Bottom Case Back / Forward Navigation */}
+        <View style={styles.caseNavBar}>
+          <TouchableOpacity
+            style={[styles.caseNavBtn, !prevCaseId && { opacity: 0.35 }]}
+            disabled={!prevCaseId}
+            onPress={() => prevCaseId && navigation.replace('ArtifactDetective', { caseId: prevCaseId })}
+          >
+            <Text style={styles.caseNavBtnText}>← Prev Case</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.caseNavBtn}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.caseNavBtnText}>Return to Folio</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.caseNavBtn, styles.caseNavBtnPrimary, !nextCaseId && { opacity: 0.35 }]}
+            disabled={!nextCaseId}
+            onPress={() => nextCaseId && navigation.replace('ArtifactDetective', { caseId: nextCaseId })}
+          >
+            <Text style={[styles.caseNavBtnText, { color: '#fff' }]}>Next Case →</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -344,13 +400,19 @@ const styles = StyleSheet.create({
     gap: 20,
   },
 
-  // Metadata Card
-  metadataCard: {
-    backgroundColor: COLORS.cardActive,
+  // Parchment Provenance Card
+  parchmentCard: {
+    backgroundColor: PARCHMENT.paper,
     borderRadius: RADII.md,
-    padding: 16,
+    padding: 6,
+    borderWidth: 1.5,
+    borderColor: PARCHMENT.borderDouble,
+  },
+  parchmentInner: {
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: PARCHMENT.border,
+    borderRadius: 6,
+    padding: 12,
     gap: 8,
   },
   metadataHeader: {
@@ -360,16 +422,19 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   metadataEmoji: {
-    fontSize: 40,
+    fontSize: 38,
   },
   caseTitle: {
-    fontSize: TYPOGRAPHY.lg,
-    fontWeight: TYPOGRAPHY.weightBold,
-    color: COLORS.sand,
+    fontFamily: FONTS.handwriting,
+    fontSize: 23,
+    color: PARCHMENT.inkPrimary,
+    lineHeight: 28,
   },
   casePeriod: {
+    fontFamily: FONTS.serif,
     fontSize: TYPOGRAPHY.xs,
-    color: COLORS.textSecondary,
+    fontStyle: 'italic',
+    color: PARCHMENT.rubric,
     marginTop: 2,
   },
   metaRow: {
@@ -377,13 +442,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   metaLabel: {
+    fontFamily: FONTS.serif,
     fontSize: TYPOGRAPHY.xs,
-    color: COLORS.textMuted,
-    width: 100,
+    color: PARCHMENT.inkMuted,
+    fontWeight: TYPOGRAPHY.weightBold,
+    width: 105,
   },
   metaValue: {
+    fontFamily: FONTS.serif,
     fontSize: TYPOGRAPHY.xs,
-    color: COLORS.textPrimary,
+    color: PARCHMENT.inkPrimary,
     flex: 1,
     fontWeight: TYPOGRAPHY.weightMedium,
   },
@@ -393,9 +461,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sectionHeader: {
-    fontSize: TYPOGRAPHY.base,
-    fontWeight: TYPOGRAPHY.weightBold,
-    color: COLORS.textPrimary,
+    fontFamily: FONTS.handwriting,
+    fontSize: 22,
+    color: COLORS.sand,
   },
   sectionSub: {
     fontSize: TYPOGRAPHY.xs,
@@ -403,16 +471,29 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   specimenCanvas: {
-    height: 240,
-    backgroundColor: COLORS.cardLocked,
+    height: 260,
+    backgroundColor: PARCHMENT.paperDark,
     borderRadius: RADII.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderActive,
+    borderWidth: 2,
+    borderColor: PARCHMENT.goldLeaf,
     position: 'relative',
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 6,
+  },
+  specimenPainting: {
+    width: '100%',
+    height: '100%',
+  },
+  plateLabelOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    left: 10,
+    backgroundColor: 'rgba(42, 27, 14, 0.78)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADII.full,
   },
   specimenVisual: {
     alignItems: 'center',
@@ -422,9 +503,10 @@ const styles = StyleSheet.create({
     fontSize: 72,
   },
   specimenCaption: {
+    fontFamily: FONTS.serif,
     fontSize: 10,
-    color: COLORS.textMuted,
-    letterSpacing: 1,
+    color: PARCHMENT.paperHighlight,
+    letterSpacing: 0.6,
   },
   hotspotPin: {
     position: 'absolute',
@@ -453,14 +535,15 @@ const styles = StyleSheet.create({
   },
   hotspotNumber: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   clueCard: {
-    backgroundColor: COLORS.cardActive,
+    backgroundColor: PARCHMENT.paper,
     borderRadius: RADII.md,
     padding: 14,
-    borderWidth: 1,
-    borderColor: COLORS.borderActive,
+    borderWidth: 1.5,
+    borderColor: PARCHMENT.borderDouble,
     gap: 6,
   },
   clueCardHeader: {
@@ -469,26 +552,55 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   clueBadge: {
-    backgroundColor: 'rgba(196, 131, 42, 0.2)',
+    backgroundColor: PARCHMENT.rubric,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: RADII.sm,
   },
   clueBadgeText: {
     fontSize: 10,
-    color: COLORS.sand,
+    color: PARCHMENT.paperHighlight,
     fontWeight: TYPOGRAPHY.weightBold,
   },
   clueTitle: {
-    fontSize: TYPOGRAPHY.sm,
-    fontWeight: TYPOGRAPHY.weightBold,
-    color: COLORS.textPrimary,
+    fontFamily: FONTS.handwriting,
+    fontSize: 19,
+    color: PARCHMENT.inkPrimary,
     flex: 1,
   },
   clueText: {
-    fontSize: TYPOGRAPHY.xs,
-    color: COLORS.textSecondary,
-    lineHeight: 18,
+    fontFamily: FONTS.serif,
+    fontSize: 14,
+    color: PARCHMENT.inkSecondary,
+    lineHeight: 22,
+  },
+  caseNavBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  caseNavBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: RADII.sm,
+    backgroundColor: COLORS.cardActive,
+    borderWidth: 1,
+    borderColor: COLORS.borderActive,
+  },
+  caseNavBtnPrimary: {
+    backgroundColor: PARCHMENT.rubric,
+    borderColor: PARCHMENT.waxSeal,
+  },
+  caseNavBtnText: {
+    fontFamily: FONTS.serif,
+    fontSize: 12,
+    fontWeight: TYPOGRAPHY.weightBold,
+    color: COLORS.sand,
   },
 
   // Hypothesis Builder

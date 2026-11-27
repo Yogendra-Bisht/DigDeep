@@ -6,45 +6,45 @@
 // ============================================================
 
 export const COLORS = {
-  // ── Backgrounds
-  bg: '#0F0D0A',
-  bgSurface: '#1A1713',
+  // ── Backgrounds (Midnight Lapis & Obsidian Slate)
+  bg: '#0B101B',
+  bgSurface: '#131B2E',
 
   // ── Text
-  textPrimary: '#F2EAD8',
-  textSecondary: '#B8A98C',
-  textMuted: '#6B5F4E',
+  textPrimary: '#F8F4E8',
+  textSecondary: '#B4C0D3',
+  textMuted: '#6D7D99',
 
-  // ── Accent & Brand
-  accent: '#C4832A',
-  sand: '#D4AE6E',
-  moss: '#5A7A3A',
+  // ── Accent & Brand (Burnished Gold & Turquoise)
+  accent: '#E6B34A',
+  sand: '#F5CE78',
+  moss: '#2DD4BF',
 
   // ── Cards & Surfaces
-  cardActive: '#241F18',
-  cardLocked: '#161310',
-  cardSelected: '#2E2318',
+  cardActive: '#1A243B',
+  cardLocked: '#101726',
+  cardSelected: '#23304F',
 
   // ── Borders
-  border: '#2E2820',
-  borderActive: '#5A4A32',
+  border: '#26334D',
+  borderActive: '#E6B34A',
 
   // ── Node Status
-  nodeUnlocked: '#C4832A',
-  nodeMastered: '#5A7A3A',
-  nodeLocked: '#3A3028',
+  nodeUnlocked: '#E6B34A',
+  nodeMastered: '#34D399',
+  nodeLocked: '#2A364F',
 
-  // ── Branch Colors
-  branchMysteries: '#8B4DB8',
-  branchSciences: '#2E86AB',
-  branchCases: '#E05C3A',
-  branchFieldwork: '#5A7A3A',
+  // ── Branch Colors (Eye-Catching Jewel Tones)
+  branchMysteries: '#B469FF',   // Royal Amethyst
+  branchSciences: '#38BDF8',    // Celestial Cyan
+  branchCases: '#FF6B57',       // Terracotta Coral
+  branchFieldwork: '#2DD4BF',   // Jade Turquoise
 
-  // ── Layer Colors
-  layerHook: '#C4832A',
-  layerWhy: '#2E86AB',
-  layerEvidence: '#8B4DB8',
-  layerInvestigate: '#5A7A3A',
+  // ── Layer / Section Colors
+  layerHook: '#E6B34A',
+  layerWhy: '#38BDF8',
+  layerEvidence: '#B469FF',
+  layerInvestigate: '#2DD4BF',
 } as const;
 
 export const TYPOGRAPHY = {
@@ -84,4 +84,27 @@ export const RADII = {
   lg: 16,
   xl: 20,
   full: 999,
+} as const;
+
+// ── Ancient Manuscript / Aged Parchment Codex Palette ─────────
+export const PARCHMENT = {
+  paper: '#F3E5C6',         // Warm aged vellum
+  paperDark: '#E6D2A8',     // Margin / deckle edge / inset frame
+  paperShadow: '#CBB182',   // Spine crease & page-stack shadow
+  paperHighlight: '#FAF2DF',// Illuminated card highlight
+  inkPrimary: '#2A1B0E',    // Iron-gall dark sepia ink
+  inkSecondary: '#583E26',  // Faded brown ink
+  inkMuted: '#7E6449',      // Marginalia / pencil annotations
+  rubric: '#8B261D',        // Vermilion rubricated drop-caps & stamps
+  goldLeaf: '#B48322',      // Illuminated gold border & seals
+  waxSeal: '#7D1E18',       // Crimson wax stamp
+  border: '#A98A5B',        // Hand-ruled sepia border
+  borderDouble: '#7A5B34',  // Outer double-rule border
+} as const;
+
+export const FONTS = {
+  // Native platform font families — zero extra native linking required
+  handwriting: 'cursive' as const,
+  serif: 'serif' as const,
+  mono: 'monospace' as const,
 } as const;
